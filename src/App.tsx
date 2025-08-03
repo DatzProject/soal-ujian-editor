@@ -13,7 +13,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbz-3x7hhjXUePgf19wbN21uDQXAOo3ayXQGhhS7mCIqyDy58ntfjNOxyXL2_md9APo9uA/exec";
+  "https://script.google.com/macros/s/AKfycbwVt6xFGoTvHISBszgJflbPMf9W_dQw-hjzqWW0eeqIvgk3l7c0PiRsPNPjVsnlgrvXcg/exec";
 
 interface QuizQuestion {
   id: string;
@@ -821,24 +821,52 @@ const StudentData: React.FC = () => {
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [editNisn, setEditNisn] = useState<string>("");
   const [editNamaSiswa, setEditNamaSiswa] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const fetchStudents = () => {
+    console.log("Fetching students from DataSiswa...");
+    setIsLoading(true);
+
     fetch(`${scriptURL}?action=getFromDataSiswa`, {
       method: "GET",
       mode: "cors",
     })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.status === "success") {
-          setStudents(data.data);
-        } else {
-          setSubmitStatus("❌ Gagal mengambil data siswa dari DataSiswa.");
-          console.error("Error fetching students:", data.message);
+      .then((response) => {
+        console.log("Response status:", response.status);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("Response data from getFromDataSiswa:", data);
+
+        // Handle different possible response formats
+        if (data.status === "success" && Array.isArray(data.data)) {
+          setStudents(data.data);
+          setSubmitStatus(
+            `✅ Berhasil mengambil ${data.data.length} data siswa.`
+          );
+        } else if (data.success === true && Array.isArray(data.data)) {
+          setStudents(data.data);
+          setSubmitStatus(
+            `✅ Berhasil mengambil ${data.data.length} data siswa.`
+          );
+        } else if (Array.isArray(data)) {
+          setStudents(data);
+          setSubmitStatus(`✅ Berhasil mengambil ${data.length} data siswa.`);
+        } else {
+          setSubmitStatus("❌ Format response tidak sesuai dari DataSiswa.");
+          console.error("Unexpected response format:", data);
+          setStudents([]);
+        }
+        setIsLoading(false);
       })
       .catch((error) => {
-        setSubmitStatus("❌ Gagal mengambil data siswa dari DataSiswa.");
+        setSubmitStatus(`❌ Gagal mengambil data siswa: ${error.message}`);
         console.error("Fetch error:", error);
+        setStudents([]);
+        setIsLoading(false);
       });
   };
 
@@ -852,27 +880,43 @@ const StudentData: React.FC = () => {
       return;
     }
 
+    // Check for duplicate NISN
+    const existingStudent = students.find(
+      (student) => student.nisn === nisn.trim()
+    );
+    if (existingStudent) {
+      setSubmitStatus("⚠️ NISN sudah ada! Gunakan NISN yang berbeda.");
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitStatus("Mengirim data...");
+
+    const requestData = {
+      action: "addToDataSiswa",
+      data: [{ nisn: nisn.trim(), nama_siswa: namaSiswa.trim() }],
+    };
+
+    console.log("Sending data:", requestData);
 
     fetch(scriptURL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "addToDataSiswa",
-        data: [{ nisn, nama_siswa: namaSiswa }],
-      }),
+      body: JSON.stringify(requestData),
     })
       .then(() => {
         setSubmitStatus("✅ Siswa berhasil ditambahkan ke DataSiswa!");
         setNisn("");
         setNamaSiswa("");
-        fetchStudents();
+        // Wait a bit before refetching to allow server to process
+        setTimeout(() => {
+          fetchStudents();
+        }, 1000);
         setIsSubmitting(false);
       })
       .catch((error) => {
-        setSubmitStatus("❌ Gagal menambahkan siswa.");
+        setSubmitStatus(`❌ Gagal menambahkan siswa: ${error.message}`);
         console.error("Fetch error:", error);
         setIsSubmitting(false);
       });
@@ -898,7 +942,7 @@ const StudentData: React.FC = () => {
         setIsSubmitting(false);
       })
       .catch((error) => {
-        setSubmitStatus("❌ Gagal menghapus data siswa.");
+        setSubmitStatus(`❌ Gagal menghapus data siswa: ${error.message}`);
         console.error("Fetch error:", error);
         setIsSubmitting(false);
       });
@@ -908,6 +952,7 @@ const StudentData: React.FC = () => {
     setEditingStudentId(student.id);
     setEditNisn(student.nisn);
     setEditNamaSiswa(student.nama_siswa);
+    setSubmitStatus(""); // Clear any previous status
   };
 
   const saveEditedStudent = (id: string) => {
@@ -916,30 +961,46 @@ const StudentData: React.FC = () => {
       return;
     }
 
+    // Check for duplicate NISN (excluding current student)
+    const existingStudent = students.find(
+      (student) => student.nisn === editNisn.trim() && student.id !== id
+    );
+    if (existingStudent) {
+      setSubmitStatus("⚠️ NISN sudah ada! Gunakan NISN yang berbeda.");
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitStatus("Menyimpan perubahan...");
+
+    const requestData = {
+      action: "editStudent",
+      id,
+      nisn: editNisn.trim(),
+      nama_siswa: editNamaSiswa.trim(),
+    };
+
+    console.log("Editing student data:", requestData);
 
     fetch(scriptURL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "editStudent",
-        id,
-        nisn: editNisn,
-        nama_siswa: editNamaSiswa,
-      }),
+      body: JSON.stringify(requestData),
     })
       .then(() => {
         setSubmitStatus("✅ Data siswa berhasil diperbarui!");
         setEditingStudentId(null);
         setEditNisn("");
         setEditNamaSiswa("");
-        fetchStudents();
+        // Wait a bit before refetching to allow server to process
+        setTimeout(() => {
+          fetchStudents();
+        }, 1000);
         setIsSubmitting(false);
       })
       .catch((error) => {
-        setSubmitStatus("❌ Gagal memperbarui data siswa.");
+        setSubmitStatus(`❌ Gagal memperbarui data siswa: ${error.message}`);
         console.error("Fetch error:", error);
         setIsSubmitting(false);
       });
@@ -949,6 +1010,48 @@ const StudentData: React.FC = () => {
     setEditingStudentId(null);
     setEditNisn("");
     setEditNamaSiswa("");
+    setSubmitStatus(""); // Clear any previous status
+  };
+
+  const deleteStudent = (student: Student) => {
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin menghapus siswa "${student.nama_siswa}" (NISN: ${student.nisn})?`
+      )
+    )
+      return;
+
+    setIsSubmitting(true);
+    setSubmitStatus(`Menghapus siswa ${student.nama_siswa}...`);
+
+    const requestData = {
+      action: "deleteStudent",
+      id: student.id,
+    };
+
+    console.log("Deleting student:", requestData);
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    })
+      .then(() => {
+        setSubmitStatus(`✅ Siswa ${student.nama_siswa} berhasil dihapus!`);
+        // Wait a bit before refetching to allow server to process
+        setTimeout(() => {
+          fetchStudents();
+        }, 1000);
+        setIsSubmitting(false);
+      })
+      .catch((error) => {
+        setSubmitStatus(
+          `❌ Gagal menghapus siswa ${student.nama_siswa}: ${error.message}`
+        );
+        console.error("Delete error:", error);
+        setIsSubmitting(false);
+      });
   };
 
   return (
@@ -968,7 +1071,7 @@ const StudentData: React.FC = () => {
           {submitStatus && (
             <div
               className={`p-4 rounded-lg mb-6 ${
-                submitStatus.includes("berhasil")
+                submitStatus.includes("berhasil") || submitStatus.includes("✅")
                   ? "bg-green-100 text-green-700 border border-green-200"
                   : submitStatus.includes("Mengirim") ||
                     submitStatus.includes("Menghapus") ||
@@ -992,6 +1095,7 @@ const StudentData: React.FC = () => {
                 onChange={(e) => setNisn(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Masukkan NISN"
+                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -1004,6 +1108,7 @@ const StudentData: React.FC = () => {
                 onChange={(e) => setNamaSiswa(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Masukkan nama siswa"
+                disabled={isSubmitting}
               />
             </div>
             <div className="flex gap-4 justify-center">
@@ -1017,7 +1122,7 @@ const StudentData: React.FC = () => {
               </button>
               <button
                 onClick={deleteAllStudents}
-                disabled={isSubmitting}
+                disabled={isSubmitting || students.length === 0}
                 className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 <Trash2 size={20} />
@@ -1028,9 +1133,14 @@ const StudentData: React.FC = () => {
 
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Daftar Siswa
+              Daftar Siswa ({students.length} siswa)
             </h3>
-            {students.length > 0 ? (
+            {isLoading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">Memuat data siswa...</p>
+              </div>
+            ) : students.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
                   <thead>
@@ -1048,7 +1158,12 @@ const StudentData: React.FC = () => {
                   </thead>
                   <tbody>
                     {students.map((student) => (
-                      <tr key={student.id} className="border-t">
+                      <tr
+                        key={
+                          student.id || `${student.nisn}-${student.nama_siswa}`
+                        }
+                        className="border-t"
+                      >
                         {editingStudentId === student.id ? (
                           <>
                             <td className="px-4 py-2 text-sm text-gray-600">
@@ -1058,6 +1173,7 @@ const StudentData: React.FC = () => {
                                 onChange={(e) => setEditNisn(e.target.value)}
                                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="Masukkan NISN"
+                                disabled={isSubmitting}
                               />
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">
@@ -1069,6 +1185,7 @@ const StudentData: React.FC = () => {
                                 }
                                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="Masukkan nama siswa"
+                                disabled={isSubmitting}
                               />
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">
@@ -1083,7 +1200,8 @@ const StudentData: React.FC = () => {
                                 </button>
                                 <button
                                   onClick={cancelEditingStudent}
-                                  className="flex items-center gap-1 px-3 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+                                  disabled={isSubmitting}
+                                  className="flex items-center gap-1 px-3 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                                 >
                                   Batal
                                 </button>
@@ -1099,12 +1217,24 @@ const StudentData: React.FC = () => {
                               {student.nama_siswa}
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">
-                              <button
-                                onClick={() => startEditingStudent(student)}
-                                className="text-blue-500 hover:text-blue-700 transition-colors"
-                              >
-                                <Edit size={20} />
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => startEditingStudent(student)}
+                                  disabled={isSubmitting}
+                                  className="text-blue-500 hover:text-blue-700 transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+                                  title="Edit siswa"
+                                >
+                                  <Edit size={18} />
+                                </button>
+                                <button
+                                  onClick={() => deleteStudent(student)}
+                                  disabled={isSubmitting}
+                                  className="text-red-500 hover:text-red-700 transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+                                  title="Hapus siswa"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
                             </td>
                           </>
                         )}
@@ -1114,7 +1244,12 @@ const StudentData: React.FC = () => {
                 </table>
               </div>
             ) : (
-              <p className="text-gray-600">Belum ada data siswa.</p>
+              <div className="text-center py-8">
+                <p className="text-gray-600">Belum ada data siswa.</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Tambah siswa baru menggunakan form di atas.
+                </p>
+              </div>
             )}
           </div>
         </div>
