@@ -1150,6 +1150,27 @@ const ExamResults: React.FC = () => {
     }
   };
 
+  // Extract unique values for dropdowns from exam results
+  const updateFiltersFromResults = (results: ExamResult[]) => {
+    const uniqueStudents = Array.from(
+      new Set(results.map((result) => result.nama).filter((nama) => nama))
+    ).sort();
+
+    const uniqueSubjects = Array.from(
+      new Set(
+        results.map((result) => result.mata_pelajaran).filter((mapel) => mapel)
+      )
+    ).sort();
+
+    const uniqueChapters = Array.from(
+      new Set(results.map((result) => result.bab_nama).filter((bab) => bab))
+    ).sort();
+
+    setStudents(uniqueStudents);
+    setSubjects(uniqueSubjects);
+    setChapters(uniqueChapters);
+  };
+
   // Fetch exam results
   const fetchExamResults = () => {
     fetch(`${scriptURL}?action=getExamResults`, {
@@ -1192,10 +1213,13 @@ const ExamResults: React.FC = () => {
             })
           );
           console.log("Formatted exam results:", formattedResults);
+
           if (
             JSON.stringify(formattedResults) !== JSON.stringify(examResults)
           ) {
             setExamResults(formattedResults);
+            // Update filter options based on exam results data
+            updateFiltersFromResults(formattedResults);
           }
         } else {
           setError("❌ Gagal mengambil data hasil ujian dari HasilUjian.");
@@ -1210,70 +1234,8 @@ const ExamResults: React.FC = () => {
       });
   };
 
-  // Fetch students from DataSiswa
-  const fetchStudents = () => {
-    fetch(`${scriptURL}?action=getFromDataSiswa`, {
-      method: "GET",
-      mode: "cors",
-    })
-      .then((response) => response.json())
-      .then((data: { status: string; data: Student[]; message?: string }) => {
-        console.log("Response from getFromDataSiswa:", data);
-        if (data.status === "success" && Array.isArray(data.data)) {
-          const uniqueStudents = Array.from(
-            new Set(data.data.map((student: Student) => student.nama_siswa))
-          ).sort();
-          setStudents(uniqueStudents);
-        } else {
-          setError("❌ Gagal mengambil data siswa dari DataSiswa.");
-          console.error("Error fetching students:", data.message);
-        }
-      })
-      .catch((error) => {
-        setError("❌ Gagal mengambil data siswa dari DataSiswa.");
-        console.error("Fetch students error:", error);
-      });
-  };
-
-  // Fetch subjects and chapters from DataMapel
-  const fetchMapelData = () => {
-    fetch(`${scriptURL}?action=getMapelData`, {
-      method: "GET",
-      mode: "cors",
-    })
-      .then((response) => response.json())
-      .then(
-        (data: { success: boolean; data: MapelData[]; message?: string }) => {
-          console.log("Response from getMapelData:", data);
-          if (data.success && Array.isArray(data.data)) {
-            const uniqueSubjects = Array.from(
-              new Set(data.data.map((item: MapelData) => item.mapel))
-            ).sort();
-            const uniqueChapters = Array.from(
-              new Set(data.data.map((item: MapelData) => item.materi))
-            ).sort();
-            setSubjects(uniqueSubjects);
-            setChapters(uniqueChapters);
-          } else {
-            setError(
-              "❌ Gagal mengambil data mata pelajaran dan materi dari DataMapel."
-            );
-            console.error("Error fetching mapel data:", data.message);
-          }
-        }
-      )
-      .catch((error) => {
-        setError(
-          "❌ Gagal mengambil data mata pelajaran dan materi dari DataMapel."
-        );
-        console.error("Fetch mapel error:", error);
-      });
-  };
-
   useEffect(() => {
     fetchExamResults();
-    fetchStudents();
-    fetchMapelData();
     const intervalId = setInterval(fetchExamResults, 10000);
     return () => clearInterval(intervalId);
   }, []);
