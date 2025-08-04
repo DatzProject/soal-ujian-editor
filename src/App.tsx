@@ -33,6 +33,7 @@ interface Student {
 }
 
 interface ExamResult {
+  status: string;
   nama: string;
   mata_pelajaran: string;
   bab_nama: string;
