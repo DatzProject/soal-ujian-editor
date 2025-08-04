@@ -13,7 +13,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbwVt6xFGoTvHISBszgJflbPMf9W_dQw-hjzqWW0eeqIvgk3l7c0PiRsPNPjVsnlgrvXcg/exec";
+  "https://script.google.com/macros/s/AKfycbxKMaz7DFbKbBL9IS-5c2F2GOxtEwFHVVnsb8EZqEIAcwChs38IqGM_QqZ1OSNHPAg6tg/exec";
 
 interface QuizQuestion {
   id: string;
@@ -1263,11 +1263,14 @@ const ExamResults: React.FC = () => {
   const [students, setStudents] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [chapters, setChapters] = useState<string[]>([]);
+  const [examTypes, setExamTypes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [nameFilter, setNameFilter] = useState<string>("");
   const [subjectFilter, setSubjectFilter] = useState<string>("");
   const [chapterFilter, setChapterFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [examTypeFilter, setExamTypeFilter] = useState<string>("");
 
   // Function to format ISO date to DD/MM/YYYY
   const formatDate = (isoDate: string): string => {
@@ -1301,9 +1304,16 @@ const ExamResults: React.FC = () => {
       new Set(results.map((result) => result.bab_nama).filter((bab) => bab))
     ).sort();
 
+    const uniqueExamTypes = Array.from(
+      new Set(
+        results.map((result) => result.jenis_ujian).filter((jenis) => jenis)
+      )
+    ).sort();
+
     setStudents(uniqueStudents);
     setSubjects(uniqueSubjects);
     setChapters(uniqueChapters);
+    setExamTypes(uniqueExamTypes);
   };
 
   // Fetch exam results
@@ -1322,6 +1332,7 @@ const ExamResults: React.FC = () => {
               mata_pelajaran: result.mata_pelajaran || "",
               bab_nama: result.bab_nama || "",
               nilai: Number(result.nilai) || 0,
+              status: result.status || "",
               persentase: Number(result.persentase) || 0,
               timestamp: result.timestamp || "",
               jenis_ujian: result.jenis_ujian || "",
@@ -1380,7 +1391,9 @@ const ExamResults: React.FC = () => {
     (result) =>
       (!nameFilter || result.nama === nameFilter) &&
       (!subjectFilter || result.mata_pelajaran === subjectFilter) &&
-      (!chapterFilter || result.bab_nama === chapterFilter)
+      (!chapterFilter || result.bab_nama === chapterFilter) &&
+      (!statusFilter || result.status === statusFilter) &&
+      (!examTypeFilter || result.jenis_ujian === examTypeFilter)
   );
 
   return (
@@ -1388,8 +1401,8 @@ const ExamResults: React.FC = () => {
       <h2 className="text-2xl font-bold mb-4">Hasil Ujian</h2>
 
       {/* Dropdown Filters */}
-      <div className="mb-4 flex flex-wrap gap-4">
-        <div className="flex-1 min-w-[200px]">
+      <div className="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div>
           <label className="block text-sm font-medium text-gray-700">
             Nama
           </label>
@@ -1412,7 +1425,7 @@ const ExamResults: React.FC = () => {
             )}
           </select>
         </div>
-        <div className="flex-1 min-w-[200px]">
+        <div>
           <label className="block text-sm font-medium text-gray-700">
             Mata Pelajaran
           </label>
@@ -1435,7 +1448,7 @@ const ExamResults: React.FC = () => {
             )}
           </select>
         </div>
-        <div className="flex-1 min-w-[200px]">
+        <div>
           <label className="block text-sm font-medium text-gray-700">Bab</label>
           <select
             value={chapterFilter}
@@ -1456,6 +1469,43 @@ const ExamResults: React.FC = () => {
             )}
           </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Status
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+          >
+            <option value="">Semua Status</option>
+            <option value="Lulus">Lulus</option>
+            <option value="Tidak Lulus">Tidak Lulus</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Jenis Ujian
+          </label>
+          <select
+            value={examTypeFilter}
+            onChange={(e) => setExamTypeFilter(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+          >
+            <option value="">Semua Jenis Ujian</option>
+            {examTypes.length === 0 ? (
+              <option value="" disabled>
+                Tidak ada data jenis ujian
+              </option>
+            ) : (
+              examTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
       </div>
 
       {isLoading && <p>Loading...</p>}
@@ -1469,6 +1519,7 @@ const ExamResults: React.FC = () => {
                 <th className="py-2 px-4 border">Mata Pelajaran</th>
                 <th className="py-2 px-4 border">Bab</th>
                 <th className="py-2 px-4 border">Nilai</th>
+                <th className="py-2 px-4 border">Status</th>
                 <th className="py-2 px-4 border">Persentase</th>
                 <th className="py-2 px-4 border">Tanggal</th>
                 <th className="py-2 px-4 border">Jenis Ujian</th>
@@ -1497,7 +1548,7 @@ const ExamResults: React.FC = () => {
             <tbody>
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={27} className="py-2 px-4 border text-center">
+                  <td colSpan={28} className="py-2 px-4 border text-center">
                     Tidak ada data hasil ujian yang sesuai dengan filter.
                   </td>
                 </tr>
@@ -1510,11 +1561,36 @@ const ExamResults: React.FC = () => {
                     </td>
                     <td className="py-2 px-4 border">{result.bab_nama}</td>
                     <td className="py-2 px-4 border">{result.nilai}</td>
+                    <td className="py-2 px-4 border">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          result.status === "Lulus"
+                            ? "bg-green-100 text-green-800"
+                            : result.status === "Tidak Lulus"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {result.status}
+                      </span>
+                    </td>
                     <td className="py-2 px-4 border">{result.persentase}%</td>
                     <td className="py-2 px-4 border">
                       {formatDate(result.timestamp)}
                     </td>
-                    <td className="py-2 px-4 border">{result.jenis_ujian}</td>
+                    <td className="py-2 px-4 border">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          result.jenis_ujian === "UTAMA"
+                            ? "bg-blue-100 text-blue-800"
+                            : result.jenis_ujian === "REMEDIAL"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {result.jenis_ujian}
+                      </span>
+                    </td>
                     <td className="py-2 px-4 border">{result.soal_1}</td>
                     <td className="py-2 px-4 border">{result.soal_2}</td>
                     <td className="py-2 px-4 border">{result.soal_3}</td>
