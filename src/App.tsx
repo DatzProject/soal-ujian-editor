@@ -515,6 +515,29 @@ const QuizMaker: React.FC = () => {
       });
   };
 
+  const downloadTemplate = () => {
+    // Define the headers for the template
+    const headers = [
+      "SOAL",
+      "GAMBAR",
+      "OPSI A",
+      "OPSI B",
+      "OPSI C",
+      "OPSI D",
+      "JAWABAN",
+    ];
+
+    // Create an empty worksheet with just headers
+    const ws = XLSX.utils.json_to_sheet([], { header: headers });
+
+    // Create a new workbook and append the worksheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template Soal");
+
+    // Generate the file and trigger download
+    XLSX.writeFile(wb, "Template_Soal_Quiz.xlsx");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-4xl mx-auto">
@@ -570,32 +593,35 @@ const QuizMaker: React.FC = () => {
             </div>
           </div>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Unggah File XLSX
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={handleFileChange}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                disabled={!selectedSheet}
-              />
-              <button
-                onClick={handleFileUpload}
-                disabled={!file || isSubmitting || !selectedSheet}
-                className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                <Plus size={20} />
-                {isSubmitting ? "Mengunggah..." : "Unggah dan Ganti Soal"}
-              </button>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              File harus dalam format XLSX dengan kolom: SOAL, GAMBAR, OPSI A,
-              OPSI B, OPSI C, OPSI D, JAWABAN.
-            </p>
+          <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={handleFileChange}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={!selectedSheet}
+            />
+            <button
+              onClick={downloadTemplate}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full sm:w-auto mb-2 sm:mb-0"
+              title="Unduh template Excel untuk import soal"
+            >
+              <FileText size={20} />
+              Unduh Template
+            </button>
+            <button
+              onClick={handleFileUpload}
+              disabled={!file || isSubmitting || !selectedSheet}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 w-full sm:w-auto"
+            >
+              <Plus size={20} />
+              {isSubmitting ? "Mengunggah..." : "Unggah dan Ganti Soal"}
+            </button>
           </div>
+          <p className="text-sm text-gray-500 mt-2">
+            File harus dalam format XLSX dengan kolom: SOAL, GAMBAR, OPSI A,
+            OPSI B, OPSI C, OPSI D, JAWABAN.
+          </p>
 
           {submitStatus && (
             <div
