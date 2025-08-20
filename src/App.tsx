@@ -216,7 +216,9 @@ const QuizMaker: React.FC = () => {
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+          defval: "",
+        }) as any[]; // Tambahkan { defval: "" } di sini
 
         if (jsonData.length === 0) {
           throw new Error("File XLSX kosong.");
@@ -238,7 +240,7 @@ const QuizMaker: React.FC = () => {
 
         if (!isValidFormat) {
           throw new Error(
-            "Format file tidak sesuai. Pastikan kolom: SOAL, GAMBAR, OPSI A, OPSI B, OPSI C, OPSI D, JAWABAN."
+            "Format file tidak sesuai. Pastikan header kolom: SOAL, GAMBAR, OPSI A, OPSI B, OPSI C, OPSI D, JAWABAN ada di file."
           );
         }
 
@@ -259,12 +261,14 @@ const QuizMaker: React.FC = () => {
               !row["OPSI C"] ||
               !row["OPSI D"]
             ) {
-              throw new Error(`Ada field kosong pada baris ${index + 2}.`);
+              throw new Error(
+                `Ada field wajib kosong pada baris ${index + 2}.`
+              );
             }
             return {
               id: String(index + 1),
               soal: String(row["SOAL"]).trim(),
-              gambar: String(row["GAMBAR"] || "").trim(),
+              gambar: String(row["GAMBAR"]).trim(), // Aman meskipun kosong
               opsiA: String(row["OPSI A"]).trim(),
               opsiB: String(row["OPSI B"]).trim(),
               opsiC: String(row["OPSI C"]).trim(),
