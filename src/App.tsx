@@ -13,7 +13,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbxKMaz7DFbKbBL9IS-5c2F2GOxtEwFHVVnsb8EZqEIAcwChs38IqGM_QqZ1OSNHPAg6tg/exec";
+  "https://script.google.com/macros/s/AKfycbwAtytHgBiXOXa5OUd_IG20fZ1NL48mkYPWDF6WFKeGnQPZ9tLZoevauh9N2Y0C4bocXQ/exec";
 
 interface QuizQuestion {
   id: string;
@@ -41,6 +41,7 @@ interface ExamResult {
   persentase: number;
   timestamp: string;
   jenis_ujian: string;
+  file_ujian: string;
   soal_1: string;
   soal_2: string;
   soal_3: string;
@@ -1367,6 +1368,7 @@ const ExamResults: React.FC = () => {
               persentase: Number(result.persentase) || 0,
               timestamp: result.timestamp || "",
               jenis_ujian: result.jenis_ujian || "",
+              file_ujian: String(result.file_ujian || ""),
               soal_1: String(result.soal_1 || ""),
               soal_2: String(result.soal_2 || ""),
               soal_3: String(result.soal_3 || ""),
@@ -1554,6 +1556,7 @@ const ExamResults: React.FC = () => {
                 <th className="py-2 px-4 border">Persentase</th>
                 <th className="py-2 px-4 border">Tanggal</th>
                 <th className="py-2 px-4 border">Jenis Ujian</th>
+                <th className="py-2 px-4 border">File Ujian</th>
                 <th className="py-2 px-4 border">Soal 1</th>
                 <th className="py-2 px-4 border">Soal 2</th>
                 <th className="py-2 px-4 border">Soal 3</th>
@@ -1579,7 +1582,7 @@ const ExamResults: React.FC = () => {
             <tbody>
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={28} className="py-2 px-4 border text-center">
+                  <td colSpan={29} className="py-2 px-4 border text-center">
                     Tidak ada data hasil ujian yang sesuai dengan filter.
                   </td>
                 </tr>
@@ -1622,6 +1625,22 @@ const ExamResults: React.FC = () => {
                         {result.jenis_ujian}
                       </span>
                     </td>
+                    <td className="py-2 px-4 border">
+                      {result.file_ujian ? (
+                        <a
+                          href={result.file_ujian}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                          onError={() => "File tidak tersedia"}
+                        >
+                          Lihat File
+                        </a>
+                      ) : (
+                        <span className="text-gray-500">Tidak ada file</span>
+                      )}
+                    </td>{" "}
+                    {/* Add this block */}
                     <td className="py-2 px-4 border">{result.soal_1}</td>
                     <td className="py-2 px-4 border">{result.soal_2}</td>
                     <td className="py-2 px-4 border">{result.soal_3}</td>
