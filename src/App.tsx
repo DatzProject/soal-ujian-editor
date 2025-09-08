@@ -388,14 +388,15 @@ const QuizMaker: React.FC = () => {
     const questionToSave = questions[index];
     if (!questionToSave || !selectedSubject || !selectedTopic) return;
 
-    if (
-      !questionToSave.soal.trim() ||
-      !questionToSave.opsiA.trim() ||
-      !questionToSave.opsiB.trim() ||
-      !questionToSave.opsiC.trim() ||
-      !questionToSave.opsiD.trim() ||
-      !questionToSave.jawaban.trim()
-    ) {
+    // Pastikan semua nilai adalah string sebelum memanggil .trim()
+    const soal = String(questionToSave.soal || "").trim();
+    const opsiA = String(questionToSave.opsiA || "").trim();
+    const opsiB = String(questionToSave.opsiB || "").trim();
+    const opsiC = String(questionToSave.opsiC || "").trim();
+    const opsiD = String(questionToSave.opsiD || "").trim();
+    const jawaban = String(questionToSave.jawaban || "").trim();
+
+    if (!soal || !opsiA || !opsiB || !opsiC || !opsiD || !jawaban) {
       setSubmitStatus("⚠️ Semua field wajib diisi!");
       return;
     }
@@ -412,13 +413,13 @@ const QuizMaker: React.FC = () => {
         mapel: selectedSubject,
         materi: selectedTopic,
         id: questionToSave.id,
-        soal: questionToSave.soal,
-        gambar: questionToSave.gambar,
-        opsiA: questionToSave.opsiA,
-        opsiB: questionToSave.opsiB,
-        opsiC: questionToSave.opsiC,
-        opsiD: questionToSave.opsiD,
-        jawaban: questionToSave.jawaban,
+        soal: soal,
+        gambar: String(questionToSave.gambar || "").trim(),
+        opsiA: opsiA,
+        opsiB: opsiB,
+        opsiC: opsiC,
+        opsiD: opsiD,
+        jawaban: jawaban,
       }),
     })
       .then(() => {
@@ -471,15 +472,16 @@ const QuizMaker: React.FC = () => {
       return;
     }
 
-    const hasEmptyFields = questions.some(
-      (q) =>
-        !q.soal.trim() ||
-        !q.opsiA.trim() ||
-        !q.opsiB.trim() ||
-        !q.opsiC.trim() ||
-        !q.opsiD.trim() ||
-        !q.jawaban.trim()
-    );
+    const hasEmptyFields = questions.some((q) => {
+      const soal = String(q.soal || "").trim();
+      const opsiA = String(q.opsiA || "").trim();
+      const opsiB = String(q.opsiB || "").trim();
+      const opsiC = String(q.opsiC || "").trim();
+      const opsiD = String(q.opsiD || "").trim();
+      const jawaban = String(q.jawaban || "").trim();
+
+      return !soal || !opsiA || !opsiB || !opsiC || !opsiD || !jawaban;
+    });
     if (hasEmptyFields) {
       setSubmitStatus("⚠️ Semua field wajib diisi!");
       return;
