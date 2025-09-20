@@ -7,13 +7,14 @@ import {
   Users,
   Edit,
   BarChart2,
+  BookOpen,
 } from "lucide-react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbwAtytHgBiXOXa5OUd_IG20fZ1NL48mkYPWDF6WFKeGnQPZ9tLZoevauh9N2Y0C4bocXQ/exec";
+  "https://script.google.com/macros/s/AKfycbx7gpnGswNLVG8Y-XmYyhFUmKJZ6fe52Nvib7v75z2u1jjJQqEzkY1U8vGc24xANHofsg/exec";
 
 interface QuizQuestion {
   id: string;
@@ -33,6 +34,7 @@ interface Student {
 }
 
 interface ExamResult {
+  id?: string;
   status: string;
   nama: string;
   mata_pelajaran: string;
@@ -68,6 +70,14 @@ interface MapelData {
   mapel: string;
   materi: string;
   sheetName: string;
+}
+
+interface MapelItem {
+  id: string;
+  mapel: string;
+  materi: string;
+  sheetName: string;
+  status: string;
 }
 
 const QuizMaker: React.FC = () => {
@@ -1294,6 +1304,7 @@ const StudentData: React.FC = () => {
 
 const ExamResults: React.FC = () => {
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
+  const [mapelFromSheet, setMapelFromSheet] = useState<string[]>([]);
   const [students, setStudents] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [chapters, setChapters] = useState<string[]>([]);
@@ -1305,6 +1316,17 @@ const ExamResults: React.FC = () => {
   const [chapterFilter, setChapterFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [examTypeFilter, setExamTypeFilter] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<string>("");
+  const [notification, setNotification] = useState<{
+    type: "success" | "error" | "loading" | "";
+    message: string;
+    show: boolean;
+  }>({
+    type: "",
+    message: "",
+    show: false,
+  });
 
   // Function to format ISO date to DD/MM/YYYY
   const formatDate = (isoDate: string): string => {
@@ -1350,6 +1372,29 @@ const ExamResults: React.FC = () => {
     setExamTypes(uniqueExamTypes);
   };
 
+  const fetchMapelFromSheet = () => {
+    fetch(`${scriptURL}?action=getMapelData`, {
+      method: "GET",
+      mode: "cors",
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const uniqueMapel = Array.from(
+            new Set(data.data.map((item: any) => item.mapel))
+          ).filter((mapel) => mapel); // Hapus nilai kosong
+          setMapelFromSheet(uniqueMapel.sort());
+        } else {
+          console.error("Error fetching mapel data for filter:", data.message);
+          setMapelFromSheet([]);
+        }
+      })
+      .catch((error) => {
+        console.error("Fetch error for mapel data:", error);
+        setMapelFromSheet([]);
+      });
+  };
+
   // Fetch exam results
   const fetchExamResults = () => {
     fetch(`${scriptURL}?action=getExamResults`, {
@@ -1361,7 +1406,8 @@ const ExamResults: React.FC = () => {
         console.log("Response from getExamResults:", data);
         if (data.success && Array.isArray(data.data)) {
           const formattedResults: ExamResult[] = data.data.map(
-            (result: ExamResult) => ({
+            (result: ExamResult & { id?: string }) => ({
+              id: result.id || String(Math.random()), // TAMBAHKAN INI
               nama: result.nama || "",
               mata_pelajaran: result.mata_pelajaran || "",
               bab_nama: result.bab_nama || "",
@@ -1417,6 +1463,8 @@ const ExamResults: React.FC = () => {
 
   useEffect(() => {
     fetchExamResults();
+    fetchMapelFromSheet();
+
     const intervalId = setInterval(fetchExamResults, 10000);
     return () => clearInterval(intervalId);
   }, []);
@@ -1431,9 +1479,118 @@ const ExamResults: React.FC = () => {
       (!examTypeFilter || result.jenis_ujian === examTypeFilter)
   );
 
+  // TAMBAHKAN FUNGSI closeNotification DI SINI
+  const closeNotification = () => {
+    setNotification({ type: "", message: "", show: false });
+  };
+
+  const deleteExamResult = (examId: string, examData: ExamResult) => {
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin menghapus hasil ujian "${examData.nama}" - ${examData.mata_pelajaran} (${examData.bab_nama})?`
+      )
+    )
+      return;
+
+    setIsDeleting(examId);
+
+    // Set loading notification
+    setNotification({
+      type: "loading",
+      message: `Menghapus hasil ujian ${examData.nama}...`,
+      show: true,
+    });
+
+    const requestData = {
+      action: "deleteExamResult",
+      id: examId,
+    };
+
+    console.log("Deleting exam result:", requestData);
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    })
+      .then(() => {
+        // Set success notification
+        setNotification({
+          type: "success",
+          message: `Hasil ujian ${examData.nama} - ${examData.mata_pelajaran} berhasil dihapus!`,
+          show: true,
+        });
+
+        // Auto hide notification after 3 seconds
+        setTimeout(() => {
+          setNotification({ type: "", message: "", show: false });
+        }, 3000);
+
+        // Refresh data after 1 second
+        setTimeout(() => {
+          fetchExamResults();
+        }, 1000);
+
+        setIsDeleting(null);
+      })
+      .catch((error) => {
+        // Set error notification
+        setNotification({
+          type: "error",
+          message: `Gagal menghapus hasil ujian ${examData.nama}: ${error.message}`,
+          show: true,
+        });
+
+        // Auto hide notification after 5 seconds
+        setTimeout(() => {
+          setNotification({ type: "", message: "", show: false });
+        }, 5000);
+
+        console.error("Delete error:", error);
+        setIsDeleting(null);
+      });
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h2 className="text-2xl font-bold mb-4">Hasil Ujian</h2>
+
+      {notification.show && (
+        <div
+          className={`p-4 rounded-lg mb-6 relative ${
+            notification.type === "success"
+              ? "bg-green-100 text-green-700 border border-green-200"
+              : notification.type === "loading"
+              ? "bg-blue-100 text-blue-700 border border-blue-200"
+              : notification.type === "error"
+              ? "bg-red-100 text-red-700 border border-red-200"
+              : "bg-gray-100 text-gray-700 border border-gray-200"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              {notification.type === "loading" && (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+              )}
+              {notification.type === "success" && (
+                <div className="text-green-600 mr-3">✓</div>
+              )}
+              {notification.type === "error" && (
+                <div className="text-red-600 mr-3">✕</div>
+              )}
+              <span>{notification.message}</span>
+            </div>
+            <button
+              onClick={closeNotification}
+              className="text-gray-500 hover:text-gray-700 ml-4"
+              title="Tutup notifikasi"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Dropdown Filters */}
       <div className="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -1470,12 +1627,12 @@ const ExamResults: React.FC = () => {
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
           >
             <option value="">Semua Mata Pelajaran</option>
-            {subjects.length === 0 ? (
+            {mapelFromSheet.length === 0 ? (
               <option value="" disabled>
                 Tidak ada data mata pelajaran
               </option>
             ) : (
-              subjects.map((subject) => (
+              mapelFromSheet.map((subject) => (
                 <option key={subject} value={subject}>
                   {subject}
                 </option>
@@ -1550,6 +1707,8 @@ const ExamResults: React.FC = () => {
           <table className="min-w-full bg-white border">
             <thead>
               <tr>
+                <th className="py-2 px-4 border">Aksi</th>
+                <th className="py-2 px-4 border">No.</th>
                 <th className="py-2 px-4 border">Nama</th>
                 <th className="py-2 px-4 border">Mata Pelajaran</th>
                 <th className="py-2 px-4 border">Bab</th>
@@ -1584,13 +1743,43 @@ const ExamResults: React.FC = () => {
             <tbody>
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={29} className="py-2 px-4 border text-center">
+                  <td colSpan={30} className="py-2 px-4 border text-center">
                     Tidak ada data hasil ujian yang sesuai dengan filter.
                   </td>
                 </tr>
               ) : (
                 filteredResults.map((result, index) => (
-                  <tr key={index}>
+                  <tr key={result.id || index}>
+                    <td className="py-2 px-4 border">
+                      <button
+                        onClick={() =>
+                          deleteExamResult(
+                            result.id || String(index + 2),
+                            result
+                          )
+                        }
+                        disabled={isDeleting !== null} // Disable SEMUA tombol jika ada yang sedang dihapus
+                        className={`transition-colors ${
+                          isDeleting !== null
+                            ? "text-gray-400 cursor-not-allowed"
+                            : "text-red-500 hover:text-red-700"
+                        }`}
+                        title={
+                          isDeleting !== null
+                            ? "Tunggu proses penghapusan selesai..."
+                            : "Hapus hasil ujian"
+                        }
+                      >
+                        {isDeleting === (result.id || String(index + 2)) ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
+                      </button>
+                    </td>
+                    <td className="py-2 px-4 border text-center font-medium">
+                      {index + 1}
+                    </td>
                     <td className="py-2 px-4 border">{result.nama}</td>
                     <td className="py-2 px-4 border">
                       {result.mata_pelajaran}
@@ -1674,6 +1863,513 @@ const ExamResults: React.FC = () => {
   );
 };
 
+const MapelData: React.FC = () => {
+  const [mapel, setMapel] = useState<string>("");
+  const [materi, setMateri] = useState<string>("");
+  const [sheetName, setSheetName] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitStatus, setSubmitStatus] = useState<string>("");
+  const [mapelData, setMapelData] = useState<MapelItem[]>([]);
+  const [editingMapelId, setEditingMapelId] = useState<string | null>(null);
+  const [editMapel, setEditMapel] = useState<string>("");
+  const [editMateri, setEditMateri] = useState<string>("");
+  const [editSheetName, setEditSheetName] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [status, setStatus] = useState<string>("");
+  const [editStatus, setEditStatus] = useState<string>("");
+
+  const fetchMapelData = () => {
+    setIsLoading(true);
+    fetch(`${scriptURL}?action=getMapelData`, {
+      method: "GET",
+      mode: "cors",
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          // Tambahkan ID berdasarkan index dan sertakan SEMUA field termasuk 'status'
+          const dataWithId = data.data.map((item: any, index: number) => ({
+            id: String(index + 2), // Asumsi data dimulai dari row 2
+            mapel: item.mapel || "",
+            materi: item.materi || "",
+            sheetName: item.sheetName || "",
+            status: item.status || "", // <-- INI YANG BARU DAN WAJIB ADA
+          }));
+          setMapelData(dataWithId);
+          setSubmitStatus(
+            `✅ Berhasil mengambil ${data.data.length} data mapel.`
+          );
+        } else {
+          setSubmitStatus("❌ Format response tidak sesuai dari DataMapel.");
+          setMapelData([]);
+        }
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        setSubmitStatus(`❌ Gagal mengambil data mapel: ${error.message}`);
+        console.error("Fetch error:", error);
+        setMapelData([]);
+        setIsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchMapelData();
+  }, []);
+
+  const handleSubmit = () => {
+    if (!mapel.trim() || !materi.trim() || !sheetName.trim()) {
+      setSubmitStatus("⚠️ Semua field wajib diisi!");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus("Mengirim data...");
+
+    const requestData = {
+      action: "addMapelData",
+      mapel: mapel.trim(),
+      materi: materi.trim(),
+      sheetName: sheetName.trim(),
+      status: status.trim(), // <-- TAMBAHKAN INI
+    };
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors", // Ganti ke 'cors' jika memungkinkan untuk error handling yang lebih baik
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    })
+      .then(() => {
+        setSubmitStatus("✅ Data mapel berhasil ditambahkan!");
+        setMapel("");
+        setMateri("");
+        setSheetName("");
+        setStatus(""); // <-- TAMBAHKAN INI
+        setTimeout(() => {
+          fetchMapelData();
+        }, 1000);
+        setIsSubmitting(false);
+      })
+      .catch((error) => {
+        setSubmitStatus(`❌ Gagal menambahkan data mapel: ${error.message}`);
+        console.error("Fetch error:", error);
+        setIsSubmitting(false);
+      });
+  };
+
+  const deleteAllMapel = () => {
+    if (
+      !confirm(
+        "Apakah Anda yakin ingin menghapus semua data mapel? Tindakan ini tidak bisa dibatalkan dan akan mempengaruhi seluruh sistem!"
+      )
+    )
+      return;
+
+    setIsSubmitting(true);
+    setSubmitStatus("Menghapus semua data mapel...");
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "deleteAllQuestions", // Menggunakan fungsi yang sudah ada
+      }),
+    })
+      .then(() => {
+        setSubmitStatus("✅ Semua data mapel berhasil dihapus!");
+        setMapelData([]);
+        setIsSubmitting(false);
+      })
+      .catch((error) => {
+        setSubmitStatus(`❌ Gagal menghapus data mapel: ${error.message}`);
+        console.error("Fetch error:", error);
+        setIsSubmitting(false);
+      });
+  };
+
+  const startEditingMapel = (item: MapelItem) => {
+    setEditingMapelId(item.id);
+    setEditMapel(item.mapel);
+    setEditMateri(item.materi);
+    setEditSheetName(item.sheetName);
+    setEditStatus(item.status); // <-- TAMBAHKAN INI
+    setSubmitStatus("");
+  };
+
+  const saveEditedMapel = (id: string) => {
+    if (!editMapel.trim() || !editMateri.trim() || !editSheetName.trim()) {
+      setSubmitStatus("⚠️ Semua field wajib diisi!");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus("Menyimpan perubahan...");
+
+    const requestData = {
+      action: "editMapelData",
+      id,
+      mapel: editMapel.trim(),
+      materi: editMateri.trim(),
+      sheetName: editSheetName.trim(),
+      status: editStatus.trim(), // <-- TAMBAHKAN INI
+    };
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    })
+      .then(() => {
+        setSubmitStatus("✅ Data mapel berhasil diperbarui!");
+        setEditingMapelId(null);
+        setEditMapel("");
+        setEditMateri("");
+        setEditSheetName("");
+        setEditStatus(""); // <-- TAMBAHKAN INI
+        setTimeout(() => {
+          fetchMapelData();
+        }, 1000);
+        setIsSubmitting(false);
+      })
+      .catch((error) => {
+        setSubmitStatus(`❌ Gagal memperbarui data mapel: ${error.message}`);
+        console.error("Fetch error:", error);
+        setIsSubmitting(false);
+      });
+  };
+
+  const cancelEditingMapel = () => {
+    setEditingMapelId(null);
+    setEditMapel("");
+    setEditMateri("");
+    setEditSheetName("");
+    setEditStatus(""); // <-- TAMBAHKAN INI
+    setSubmitStatus("");
+  };
+
+  const deleteMapelItem = (item: MapelItem) => {
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin menghapus data mapel "${item.mapel}" - ${item.materi}? Tindakan ini akan mempengaruhi soal-soal yang terkait.`
+      )
+    )
+      return;
+
+    setIsSubmitting(true);
+    setSubmitStatus(`Menghapus data mapel ${item.mapel}...`);
+
+    const requestData = {
+      action: "deleteMapelData",
+      id: item.id,
+    };
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    })
+      .then(() => {
+        setSubmitStatus(`✅ Data mapel ${item.mapel} berhasil dihapus!`);
+        setTimeout(() => {
+          fetchMapelData();
+        }, 1000);
+        setIsSubmitting(false);
+      })
+      .catch((error) => {
+        setSubmitStatus(
+          `❌ Gagal menghapus data mapel ${item.mapel}: ${error.message}`
+        );
+        console.error("Delete error:", error);
+        setIsSubmitting(false);
+      });
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <div className="flex items-center gap-3 mb-6">
+            <BookOpen className="text-blue-600" size={32} />
+            <h1 className="text-3xl font-bold text-gray-800">
+              Data Mata Pelajaran
+            </h1>
+          </div>
+          <p className="text-gray-600 mb-6">
+            Kelola data mata pelajaran, materi, dan nama sheet terkait.
+            Perubahan di sini akan mempengaruhi seluruh sistem.
+          </p>
+
+          {submitStatus && (
+            <div
+              className={`p-4 rounded-lg mb-6 ${
+                submitStatus.includes("berhasil") || submitStatus.includes("✅")
+                  ? "bg-green-100 text-green-700 border border-green-200"
+                  : submitStatus.includes("Mengirim") ||
+                    submitStatus.includes("Menghapus") ||
+                    submitStatus.includes("Menyimpan")
+                  ? "bg-blue-100 text-blue-700 border border-blue-200"
+                  : "bg-red-100 text-red-700 border border-red-200"
+              }`}
+            >
+              {submitStatus}
+            </div>
+          )}
+
+          <div className="grid gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nama Mata Pelajaran
+              </label>
+              <input
+                type="text"
+                value={mapel}
+                onChange={(e) => setMapel(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Masukkan nama mata pelajaran"
+                disabled={isSubmitting}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nama Materi
+              </label>
+              <input
+                type="text"
+                value={materi}
+                onChange={(e) => setMateri(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Masukkan nama materi"
+                disabled={isSubmitting}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nama Sheet (di Google Sheets)
+              </label>
+              <input
+                type="text"
+                value={sheetName}
+                onChange={(e) => setSheetName(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Masukkan nama sheet yang sesuai"
+                disabled={isSubmitting}
+              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Pilih Status</option>
+                  <option value="Izinkan">Izinkan</option>
+                  <option value="Tidak Diizinkan">Tidak Diizinkan</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Atur apakah mata pelajaran ini dapat digunakan untuk membuat
+                  soal.
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Pastikan sheet dengan nama ini sudah ada di spreadsheet Anda.
+              </p>
+            </div>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                <Save size={20} />
+                {isSubmitting ? "Mengirim..." : "Tambah Data Mapel"}
+              </button>
+              <button
+                onClick={deleteAllMapel}
+                disabled={isSubmitting || mapelData.length === 0}
+                className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={20} />
+                {isSubmitting ? "Menghapus..." : "Hapus Semua Data Mapel"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Daftar Data Mapel ({mapelData.length} item)
+            </h3>
+            {isLoading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">Memuat data mapel...</p>
+              </div>
+            ) : mapelData.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                        Mata Pelajaran
+                      </th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                        Materi
+                      </th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                        Nama Sheet
+                      </th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                        Status
+                      </th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                        Aksi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mapelData.map((item) => (
+                      <tr key={item.id} className="border-t">
+                        {editingMapelId === item.id ? (
+                          <>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              <input
+                                type="text"
+                                value={editMapel}
+                                onChange={(e) => setEditMapel(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Nama Mapel"
+                                disabled={isSubmitting}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              <input
+                                type="text"
+                                value={editMateri}
+                                onChange={(e) => setEditMateri(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Nama Materi"
+                                disabled={isSubmitting}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              <input
+                                type="text"
+                                value={editSheetName}
+                                onChange={(e) =>
+                                  setEditSheetName(e.target.value)
+                                }
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Nama Sheet"
+                                disabled={isSubmitting}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {/* HANYA TAMPILKAN DROPDOWN, HAPUS INPUT TEXT */}
+                              <select
+                                value={editStatus}
+                                onChange={(e) => setEditStatus(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                disabled={isSubmitting}
+                              >
+                                <option value="">Pilih Status</option>
+                                <option value="Izinkan">Izinkan</option>
+                                <option value="Tidak Diizinkan">
+                                  Tidak Diizinkan
+                                </option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => saveEditedMapel(item.id)}
+                                  disabled={isSubmitting}
+                                  className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                  <Save size={16} />
+                                  {isSubmitting ? "Menyimpan..." : "Simpan"}
+                                </button>
+                                <button
+                                  onClick={cancelEditingMapel}
+                                  disabled={isSubmitting}
+                                  className="flex items-center gap-1 px-3 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {item.mapel}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {item.materi}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {item.sheetName}
+                            </td>
+                            <td className="px-4 py-2 text-sm">
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  item.status === "Izinkan"
+                                    ? "bg-green-100 text-green-800"
+                                    : item.status === "Tidak Diizinkan"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-gray-100 text-gray-800"
+                                }`}
+                              >
+                                {item.status || "Tidak Diatur"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => startEditingMapel(item)}
+                                  disabled={isSubmitting}
+                                  className="text-blue-500 hover:text-blue-700 transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+                                  title="Edit data mapel"
+                                >
+                                  <Edit size={18} />
+                                </button>
+                                <button
+                                  onClick={() => deleteMapelItem(item)}
+                                  disabled={isSubmitting}
+                                  className="text-red-500 hover:text-red-700 transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+                                  title="Hapus data mapel"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Belum ada data mata pelajaran.</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Tambah data baru menggunakan form di atas.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <Router>
@@ -1690,6 +2386,10 @@ const App: React.FC = () => {
             <Users size={20} />
             Data Siswa
           </Link>
+          <Link to="/mapel" className="flex items-center gap-2 hover:underline">
+            <BookOpen size={20} />
+            Data Mapel
+          </Link>
           <Link
             to="/exam-results"
             className="flex items-center gap-2 hover:underline"
@@ -1702,6 +2402,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<QuizMaker />} />
         <Route path="/students" element={<StudentData />} />
+        <Route path="/mapel" element={<MapelData />} /> {/* Route Baru */}
         <Route path="/exam-results" element={<ExamResults />} />
       </Routes>
     </Router>
