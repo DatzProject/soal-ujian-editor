@@ -1303,6 +1303,7 @@ const StudentData: React.FC = () => {
 };
 
 const ExamResults: React.FC = () => {
+  const [sortOrder, setSortOrder] = useState<"highest" | "lowest" | "">("");
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [mapelFromSheet, setMapelFromSheet] = useState<string[]>([]);
   const [students, setStudents] = useState<string[]>([]);
@@ -1477,14 +1478,57 @@ const ExamResults: React.FC = () => {
   }, []);
 
   // Filter the exam results based on dropdown selections
-  const filteredResults = examResults.filter(
-    (result) =>
-      (!nameFilter || result.nama === nameFilter) &&
-      (!subjectFilter || result.mata_pelajaran === subjectFilter) &&
-      (!chapterFilter || result.bab_nama === chapterFilter) &&
-      (!statusFilter || result.status === statusFilter) &&
-      (!examTypeFilter || result.jenis_ujian === examTypeFilter)
-  );
+  const filteredResults = React.useMemo(() => {
+    // Apply filters first
+    let results = examResults.filter(
+      (result) =>
+        (!nameFilter || result.nama === nameFilter) &&
+        (!subjectFilter || result.mata_pelajaran === subjectFilter) &&
+        (!chapterFilter || result.bab_nama === chapterFilter) &&
+        (!statusFilter || result.status === statusFilter) &&
+        (!examTypeFilter || result.jenis_ujian === examTypeFilter)
+    );
+
+    // Apply sorting based on 'Peringkat' dropdown
+    if (sortOrder === "highest") {
+      // Sort from highest to lowest
+      // If scores are equal, sort by timestamp (oldest first)
+      results.sort((a, b) => {
+        if (b.nilai === a.nilai) {
+          // Convert timestamp strings to Date objects for comparison
+          // Older timestamp (smaller date) comes first
+          return (
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+        }
+        return b.nilai - a.nilai;
+      });
+    } else if (sortOrder === "lowest") {
+      // Sort from lowest to highest
+      // If scores are equal, sort by timestamp (oldest first)
+      results.sort((a, b) => {
+        if (a.nilai === b.nilai) {
+          // Convert timestamp strings to Date objects for comparison
+          // Older timestamp (smaller date) comes first
+          return (
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+        }
+        return a.nilai - b.nilai;
+      });
+    }
+    // If sortOrder is "", no specific sorting is applied (keep original order)
+
+    return results;
+  }, [
+    examResults,
+    nameFilter,
+    subjectFilter,
+    chapterFilter,
+    statusFilter,
+    examTypeFilter,
+    sortOrder,
+  ]);
 
   // TAMBAHKAN FUNGSI closeNotification DI SINI
   const closeNotification = () => {
@@ -1704,6 +1748,23 @@ const ExamResults: React.FC = () => {
               ))
             )}
           </select>
+          {/* Dropdown Peringkat */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Peringkat
+            </label>
+            <select
+              value={sortOrder}
+              onChange={(e) =>
+                setSortOrder(e.target.value as "highest" | "lowest" | "")
+              }
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+            >
+              <option value="">Default</option>
+              <option value="highest">Tertinggi</option>
+              <option value="lowest">Terendah</option>
+            </select>
+          </div>
         </div>
       </div>
 
