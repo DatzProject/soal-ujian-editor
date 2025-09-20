@@ -1381,9 +1381,16 @@ const ExamResults: React.FC = () => {
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
           const uniqueMapel = Array.from(
-            new Set(data.data.map((item: any) => item.mapel))
-          ).filter((mapel) => mapel); // Hapus nilai kosong
-          setMapelFromSheet(uniqueMapel.sort());
+            new Set(
+              data.data
+                .map((item: any) => item.mapel)
+                .filter(
+                  (mapel: any): mapel is string =>
+                    typeof mapel === "string" && mapel.trim() !== ""
+                )
+            )
+          ).sort();
+          setMapelFromSheet(uniqueMapel as string[]); // <-- TYPE ASSERTION DITAMBAHKAN DI SINI
         } else {
           console.error("Error fetching mapel data for filter:", data.message);
           setMapelFromSheet([]);
