@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import {
   Plus,
   Trash2,
@@ -1603,6 +1605,53 @@ const ExamResults: React.FC = () => {
       });
   };
 
+  const downloadPDF = (result: ExamResult, index: number) => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFontSize(18);
+    doc.text("Hasil Ujian Siswa", 14, 20);
+
+    // Info Siswa
+    doc.setFontSize(12);
+    doc.text(`Nama: ${result.nama}`, 14, 35);
+    doc.text(`Mata Pelajaran: ${result.mata_pelajaran}`, 14, 45);
+    doc.text(`Bab: ${result.bab_nama}`, 14, 55);
+    doc.text(`Jenis Ujian: ${result.jenis_ujian}`, 14, 65);
+    doc.text(`Tanggal: ${formatDate(result.timestamp)}`, 14, 75);
+
+    // Hasil
+    doc.setFontSize(14);
+    doc.text(`Nilai: ${result.nilai}`, 14, 90);
+    doc.text(`Persentase: ${result.persentase}%`, 14, 100);
+    doc.text(`Status: ${result.status}`, 14, 110);
+
+    // Detail Jawaban
+    doc.setFontSize(12);
+    doc.text("Detail Jawaban:", 14, 125);
+
+    let yPos = 135;
+    for (let i = 1; i <= 20; i++) {
+      const soalKey = `soal_${i}` as keyof ExamResult;
+      const jawaban = result[soalKey];
+      if (jawaban) {
+        doc.text(`Soal ${i}: ${jawaban}`, 14, yPos);
+        yPos += 8;
+
+        // Pindah ke halaman baru jika space habis
+        if (yPos > 280) {
+          doc.addPage();
+          yPos = 20;
+        }
+      }
+    }
+
+    // Save PDF
+    doc.save(
+      `Hasil_Ujian_${result.nama}_${result.mata_pelajaran}_${result.bab_nama}.pdf`
+    );
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h2 className="text-2xl font-bold mb-4">Hasil Ujian</h2>
@@ -1819,31 +1868,48 @@ const ExamResults: React.FC = () => {
                 filteredResults.map((result, index) => (
                   <tr key={result.id || index}>
                     <td className="py-2 px-4 border">
-                      <button
-                        onClick={() =>
-                          deleteExamResult(
-                            result.id || String(index + 2),
-                            result
-                          )
-                        }
-                        disabled={isDeleting !== null} // Disable SEMUA tombol jika ada yang sedang dihapus
-                        className={`transition-colors ${
-                          isDeleting !== null
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "text-red-500 hover:text-red-700"
-                        }`}
-                        title={
-                          isDeleting !== null
-                            ? "Tunggu proses penghapusan selesai..."
-                            : "Hapus hasil ujian"
-                        }
-                      >
-                        {isDeleting === (result.id || String(index + 2)) ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
-                        ) : (
-                          <Trash2 size={18} />
-                        )}
-                      </button>
+                      <div className="flex gap-2 items-center">
+                        {/* Tombol Download PDF */}
+                        <button
+                          onClick={() => downloadPDF(result, index)}
+                          disabled={isDeleting !== null}
+                          className={`transition-colors ${
+                            isDeleting !== null
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "text-green-500 hover:text-green-700"
+                          }`}
+                          title="Download PDF"
+                        >
+                          <FileText size={18} />
+                        </button>
+
+                        {/* Tombol Delete */}
+                        <button
+                          onClick={() =>
+                            deleteExamResult(
+                              result.id || String(index + 2),
+                              result
+                            )
+                          }
+                          disabled={isDeleting !== null}
+                          className={`transition-colors ${
+                            isDeleting !== null
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "text-red-500 hover:text-red-700"
+                          }`}
+                          title={
+                            isDeleting !== null
+                              ? "Tunggu proses penghapusan selesai..."
+                              : "Hapus hasil ujian"
+                          }
+                        >
+                          {isDeleting === (result.id || String(index + 2)) ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                          ) : (
+                            <Trash2 size={18} />
+                          )}
+                        </button>
+                      </div>
                     </td>
                     <td className="py-2 px-4 border text-center font-medium">
                       {index + 1}
