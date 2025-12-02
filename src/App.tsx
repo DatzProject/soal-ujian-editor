@@ -14,7 +14,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbx7gpnGswNLVG8Y-XmYyhFUmKJZ6fe52Nvib7v75z2u1jjJQqEzkY1U8vGc24xANHofsg/exec";
+  "https://script.google.com/macros/s/AKfycby1ak6zisZ5RatuzcV_VbHbOv66KyTHmsKTZs42IXns9qYvGzTyNjg-mx3r0ROkEVszbw/exec";
 
 interface QuizQuestion {
   id: string;
