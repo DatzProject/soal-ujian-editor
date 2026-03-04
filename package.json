@@ -10,15 +10,15 @@
   "main": "src/index.tsx",
   "dependencies": {
     "loader-utils": "3.2.1",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
     "react-scripts": "5.0.1",
-    "react-router-dom": "7.11.0",
-    "jspdf": "4.0.0",
+    "lucide-react": "0.536.0",
+    "react-router-dom": "7.7.1",
+    "mammoth": "1.10.0",
+    "xlsx": "0.18.5",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "jspdf-autotable": "5.0.2",
-    "react-signature-canvas": "1.1.0-alpha.2",
-    "prop-types": "15.8.1",
-    "xlsx": "0.18.5"
+    "jspdf": "3.0.4"
   },
   "devDependencies": {
     "@types/react": "18.2.38",
