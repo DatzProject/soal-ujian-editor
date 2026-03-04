@@ -10,13 +10,14 @@ import {
   Edit,
   BarChart2,
   BookOpen,
+  GraduationCap,
 } from "lucide-react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycby1ak6zisZ5RatuzcV_VbHbOv66KyTHmsKTZs42IXns9qYvGzTyNjg-mx3r0ROkEVszbw/exec";
+  "https://script.google.com/macros/s/AKfycbyRnBKNf2C8SCwN0bzHAJDbtt1hIiO0w7kPnKqXPHgSkRper3eKT2ZBLUhQGCMRBpC_/exec";
 
 interface QuizQuestion {
   id: string;
@@ -2504,6 +2505,732 @@ const MapelData: React.FC = () => {
   );
 };
 
+const SHEET_NILAI_LIST = [
+  { label: "PPKN", sheetParam: "NilaiPPKN" },
+  { label: "B. Indonesia", sheetParam: "NilaiBIndo" },
+  { label: "Matematika", sheetParam: "NilaiMTK" },
+  { label: "IPAS", sheetParam: "NilaiIPAS" },
+  { label: "B. Inggris", sheetParam: "NilaiBInggris" },
+  { label: "Seni Musik", sheetParam: "NilaiSeniMusik" },
+];
+
+const BAB_COLUMNS = [
+  { key: "bab1", label: "BAB 1" },
+  { key: "bab2", label: "BAB 2" },
+  { key: "bab3", label: "BAB 3" },
+  { key: "bab4", label: "BAB 4" },
+  { key: "bab5", label: "BAB 5" },
+  { key: "bab6", label: "BAB 6" },
+  { key: "bab7", label: "BAB 7" },
+  { key: "bab8", label: "BAB 8" },
+  { key: "bab9", label: "BAB 9" },
+  { key: "bab10", label: "BAB 10" },
+  { key: "sas1", label: "SAS 1" },
+  { key: "sas2", label: "SAS 2" },
+];
+
+interface NilaiRow {
+  nama_siswa: string;
+  mapel: string;
+  bab1: number | string;
+  bab2: number | string;
+  bab3: number | string;
+  bab4: number | string;
+  bab5: number | string;
+  bab6: number | string;
+  bab7: number | string;
+  bab8: number | string;
+  bab9: number | string;
+  bab10: number | string;
+  sas1: number | string;
+  sas2: number | string;
+}
+
+const NilaiSiswa: React.FC = () => {
+  const [selectedMapel, setSelectedMapel] = useState<string>("NilaiPPKN");
+  const [nilaiData, setNilaiData] = useState<NilaiRow[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
+  const [searchName, setSearchName] = useState<string>("");
+
+  const fetchNilai = (sheetParam: string) => {
+    setIsLoading(true);
+    setError("");
+    setNilaiData([]);
+    fetch(
+      `${scriptURL}?action=getNilaiSiswa&sheet=${encodeURIComponent(
+        sheetParam
+      )}`,
+      { method: "GET", mode: "cors" }
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) setNilaiData(data.data);
+        else setError("❌ Gagal mengambil data nilai: " + (data.message || ""));
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError("❌ " + err.message);
+        setIsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchNilai(selectedMapel);
+  }, [selectedMapel]);
+
+  const filtered = nilaiData.filter((row) =>
+    row.nama_siswa?.toLowerCase().includes(searchName.toLowerCase())
+  );
+
+  const calcAverage = (row: NilaiRow): string => {
+    const vals = BAB_COLUMNS.map((c) =>
+      Number(row[c.key as keyof NilaiRow])
+    ).filter((v) => !isNaN(v) && v > 0);
+    if (!vals.length) return "-";
+    return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+  };
+
+  const downloadExcel = (colKey: string, colLabel: string) => {
+    const rows = filtered
+      .map((row) => {
+        const val = row[colKey as keyof NilaiRow];
+        const n = Number(val);
+        return {
+          Nama: row.nama_siswa,
+          Nilai: val !== "" && val !== null && !isNaN(n) && n > 0 ? n : "",
+        };
+      })
+      .filter((r) => r.Nilai !== ""); // hanya yang ada nilainya
+
+    if (rows.length === 0) {
+      alert(`Tidak ada data nilai untuk ${colLabel}`);
+      return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, colLabel);
+    XLSX.writeFile(wb, `Nilai_${currentLabel}_${colLabel}.xlsx`);
+  };
+
+  const currentLabel =
+    SHEET_NILAI_LIST.find((m) => m.sheetParam === selectedMapel)?.label || "";
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%)",
+        fontFamily: "'Segoe UI',system-ui,sans-serif",
+        padding: "24px 16px",
+      }}
+    >
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} .nrow:hover{background:rgba(255,255,255,0.04)!important}`}</style>
+      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+        {/* Header */}
+        <div
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 20,
+            padding: "24px 32px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 50,
+              height: 50,
+              borderRadius: 14,
+              background: "linear-gradient(135deg,#3b82f6,#8b5cf6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 24,
+              boxShadow: "0 8px 20px rgba(59,130,246,0.4)",
+            }}
+          >
+            🎓
+          </div>
+          <div>
+            <h1
+              style={{
+                fontSize: 24,
+                fontWeight: 800,
+                color: "#fff",
+                margin: 0,
+              }}
+            >
+              Nilai Ujian Siswa
+            </h1>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.45)",
+                margin: "4px 0 0",
+                fontSize: 13,
+              }}
+            >
+              Rekap nilai per mata pelajaran — BAB 1 s.d. BAB 10 &amp; SAS
+            </p>
+          </div>
+          <button
+            onClick={() => fetchNilai(selectedMapel)}
+            disabled={isLoading}
+            style={{
+              marginLeft: "auto",
+              padding: "9px 18px",
+              borderRadius: 11,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "rgba(255,255,255,0.07)",
+              color: "rgba(255,255,255,0.7)",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            🔄 {isLoading ? "Memuat..." : "Refresh"}
+          </button>
+        </div>
+
+        {/* Tabs + Search */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            background: "rgba(255,255,255,0.04)",
+            borderRadius: 14,
+            padding: 6,
+            border: "1px solid rgba(255,255,255,0.08)",
+            marginBottom: 16,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          {SHEET_NILAI_LIST.map((m) => (
+            <button
+              key={m.sheetParam}
+              onClick={() => setSelectedMapel(m.sheetParam)}
+              style={{
+                padding: "9px 20px",
+                borderRadius: 10,
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 700,
+                transition: "all 0.2s",
+                background:
+                  selectedMapel === m.sheetParam
+                    ? "linear-gradient(135deg,#3b82f6,#8b5cf6)"
+                    : "transparent",
+                color:
+                  selectedMapel === m.sheetParam
+                    ? "#fff"
+                    : "rgba(255,255,255,0.45)",
+                boxShadow:
+                  selectedMapel === m.sheetParam
+                    ? "0 4px 14px rgba(59,130,246,0.35)"
+                    : "none",
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
+          <div style={{ marginLeft: "auto", position: "relative" }}>
+            <span
+              style={{
+                position: "absolute",
+                left: 11,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "rgba(255,255,255,0.35)",
+                pointerEvents: "none",
+              }}
+            >
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="Cari nama siswa..."
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              style={{
+                padding: "9px 14px 9px 36px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.06)",
+                color: "#fff",
+                fontSize: 13,
+                outline: "none",
+                width: 200,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Stats */}
+        {!isLoading && !error && nilaiData.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            {[
+              {
+                icon: "👥",
+                label: "Total Siswa",
+                value: filtered.length,
+                color: "#3b82f6",
+              },
+              {
+                icon: "📚",
+                label: "Mata Pelajaran",
+                value: currentLabel,
+                color: "#8b5cf6",
+              },
+              {
+                icon: "✅",
+                label: "Nilai ≥ 75",
+                color: "#10b981",
+                value:
+                  filtered.filter((r) => {
+                    const v = BAB_COLUMNS.map((c) =>
+                      Number(r[c.key as keyof NilaiRow])
+                    ).filter((x) => !isNaN(x) && x > 0);
+                    return (
+                      v.length && v.reduce((a, b) => a + b, 0) / v.length >= 75
+                    );
+                  }).length + " siswa",
+              },
+              {
+                icon: "⚠️",
+                label: "Perlu Perhatian",
+                color: "#f59e0b",
+                value:
+                  filtered.filter((r) => {
+                    const v = BAB_COLUMNS.map((c) =>
+                      Number(r[c.key as keyof NilaiRow])
+                    ).filter((x) => !isNaN(x) && x > 0);
+                    return (
+                      v.length && v.reduce((a, b) => a + b, 0) / v.length < 75
+                    );
+                  }).length + " siswa",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: `1px solid ${s.color}30`,
+                  borderRadius: 12,
+                  padding: "14px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <span style={{ fontSize: 22 }}>{s.icon}</span>
+                <div>
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.4)",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {s.label}
+                  </div>
+                  <div style={{ color: "#fff", fontWeight: 800, fontSize: 17 }}>
+                    {s.value}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Table */}
+        <div
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 18,
+            overflow: "hidden",
+          }}
+        >
+          {isLoading ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "60px 20px",
+                color: "rgba(255,255,255,0.45)",
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  border: "3px solid rgba(59,130,246,0.25)",
+                  borderTopColor: "#3b82f6",
+                  borderRadius: "50%",
+                  margin: "0 auto 14px",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+              Memuat data nilai...
+            </div>
+          ) : error ? (
+            <div style={{ textAlign: "center", padding: "60px 20px" }}>
+              <div style={{ fontSize: 48, marginBottom: 10 }}>😕</div>
+              <p
+                style={{ color: "#ef4444", margin: "0 0 8px", fontWeight: 600 }}
+              >
+                {error}
+              </p>
+              <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13 }}>
+                Pastikan fungsi{" "}
+                <code
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                  }}
+                >
+                  getNilaiSiswa
+                </code>{" "}
+                sudah ditambahkan ke Google Apps Script dan di-deploy ulang.
+              </p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "60px 20px",
+                color: "rgba(255,255,255,0.35)",
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 10 }}>📭</div>
+              {searchName
+                ? `Tidak ada siswa "${searchName}"`
+                : "Tidak ada data nilai."}
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  minWidth: 1000,
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      background:
+                        "linear-gradient(90deg,rgba(59,130,246,0.18),rgba(139,92,246,0.18))",
+                      borderBottom: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <th
+                      style={{
+                        padding: "13px 14px",
+                        textAlign: "center",
+                        color: "rgba(255,255,255,0.5)",
+                        fontWeight: 700,
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                        width: 44,
+                      }}
+                    >
+                      No
+                    </th>
+                    <th
+                      style={{
+                        padding: "13px 18px",
+                        textAlign: "left",
+                        color: "rgba(255,255,255,0.5)",
+                        fontWeight: 700,
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                        minWidth: 190,
+                      }}
+                    >
+                      Nama Siswa
+                    </th>
+                    {BAB_COLUMNS.map((col) => (
+                      <th
+                        key={col.key}
+                        style={{
+                          padding: "13px 8px",
+                          textAlign: "center",
+                          color:
+                            col.key === "sas1" || col.key === "sas2"
+                              ? "#c084fc"
+                              : "rgba(255,255,255,0.5)",
+                          fontWeight: 700,
+                          fontSize: 11,
+                          textTransform: "uppercase",
+                          minWidth: 65,
+                          borderLeft:
+                            col.key === "sas1"
+                              ? "2px solid rgba(139,92,246,0.3)"
+                              : undefined,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          {col.label}
+                          <button
+                            onClick={() => downloadExcel(col.key, col.label)}
+                            title={`Download Excel ${col.label}`}
+                            style={{
+                              background: "rgba(255,255,255,0.08)",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: 6,
+                              color: "rgba(255,255,255,0.6)",
+                              cursor: "pointer",
+                              fontSize: 11,
+                              padding: "2px 6px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 3,
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={(e) => {
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.background = "rgba(16,185,129,0.25)";
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.color = "#34d399";
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.borderColor = "rgba(16,185,129,0.4)";
+                            }}
+                            onMouseLeave={(e) => {
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.background = "rgba(255,255,255,0.08)";
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.color = "rgba(255,255,255,0.6)";
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.borderColor = "rgba(255,255,255,0.15)";
+                            }}
+                          >
+                            ⬇ xls
+                          </button>
+                        </div>
+                      </th>
+                    ))}
+                    <th
+                      style={{
+                        padding: "13px 14px",
+                        textAlign: "center",
+                        color: "#fbbf24",
+                        fontWeight: 700,
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                        borderLeft: "2px solid rgba(251,191,36,0.25)",
+                        minWidth: 85,
+                      }}
+                    >
+                      Rata-rata
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((row, idx) => {
+                    const avg = calcAverage(row);
+                    const avgNum = parseFloat(avg);
+                    const scoreColor = (v: number) =>
+                      v >= 90
+                        ? "#34d399"
+                        : v >= 75
+                        ? "#60a5fa"
+                        : v >= 60
+                        ? "#fbbf24"
+                        : "#f87171";
+                    const scoreBg = (v: number) =>
+                      v >= 90
+                        ? "rgba(16,185,129,0.16)"
+                        : v >= 75
+                        ? "rgba(59,130,246,0.16)"
+                        : v >= 60
+                        ? "rgba(245,158,11,0.16)"
+                        : "rgba(239,68,68,0.16)";
+                    return (
+                      <tr
+                        key={idx}
+                        className="nrow"
+                        style={{
+                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                          transition: "background 0.15s",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "11px 14px",
+                            textAlign: "center",
+                            color: "rgba(255,255,255,0.28)",
+                            fontSize: 13,
+                          }}
+                        >
+                          {idx + 1}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 18px",
+                            color: "#e2e8f0",
+                            fontWeight: 600,
+                            fontSize: 14,
+                          }}
+                        >
+                          {row.nama_siswa}
+                        </td>
+                        {BAB_COLUMNS.map((col) => {
+                          const val = row[col.key as keyof NilaiRow];
+                          const n = Number(val);
+                          const ok =
+                            val !== "" && val !== null && !isNaN(n) && n > 0;
+                          return (
+                            <td
+                              key={col.key}
+                              style={{
+                                padding: "9px 6px",
+                                textAlign: "center",
+                                borderLeft:
+                                  col.key === "sas1"
+                                    ? "2px solid rgba(139,92,246,0.1)"
+                                    : undefined,
+                              }}
+                            >
+                              {ok ? (
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    padding: "3px 9px",
+                                    borderRadius: 7,
+                                    background: scoreBg(n),
+                                    color: scoreColor(n),
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  {n}
+                                </span>
+                              ) : (
+                                <span
+                                  style={{
+                                    color: "rgba(255,255,255,0.13)",
+                                    fontSize: 15,
+                                  }}
+                                >
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td
+                          style={{
+                            padding: "9px 12px",
+                            textAlign: "center",
+                            borderLeft: "2px solid rgba(251,191,36,0.1)",
+                          }}
+                        >
+                          {avg !== "-" ? (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "4px 12px",
+                                borderRadius: 9,
+                                background: scoreBg(avgNum),
+                                color: scoreColor(avgNum),
+                                fontWeight: 800,
+                                fontSize: 14,
+                                border: "1px solid",
+                                borderColor: scoreColor(avgNum) + "55",
+                              }}
+                            >
+                              {avg}
+                            </span>
+                          ) : (
+                            <span style={{ color: "rgba(255,255,255,0.15)" }}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Legend */}
+        {!isLoading && !error && nilaiData.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 18,
+              marginTop: 14,
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
+            {[
+              ["#34d399", "≥ 90 — Sangat Baik"],
+              ["#60a5fa", "75–89 — Baik"],
+              ["#fbbf24", "60–74 — Cukup"],
+              ["#f87171", "< 60 — Perlu Bimbingan"],
+            ].map(([color, label]) => (
+              <div
+                key={label}
+                style={{ display: "flex", alignItems: "center", gap: 7 }}
+              >
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 3,
+                    background: color,
+                    opacity: 0.75,
+                  }}
+                />
+                <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 12 }}>
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <Router>
@@ -2531,6 +3258,13 @@ const App: React.FC = () => {
             <BarChart2 size={20} />
             Hasil Ujian
           </Link>
+          <Link
+            to="/nilai-siswa"
+            className="flex items-center gap-2 hover:underline"
+          >
+            <GraduationCap size={20} />
+            Nilai Siswa
+          </Link>
         </div>
       </nav>
       <Routes>
@@ -2538,6 +3272,7 @@ const App: React.FC = () => {
         <Route path="/students" element={<StudentData />} />
         <Route path="/mapel" element={<MapelData />} /> {/* Route Baru */}
         <Route path="/exam-results" element={<ExamResults />} />
+        <Route path="/nilai-siswa" element={<NilaiSiswa />} />
       </Routes>
     </Router>
   );
