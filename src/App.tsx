@@ -1533,6 +1533,21 @@ const ExamResults: React.FC = () => {
     sortOrder,
   ]);
 
+  const duplicateKeys = React.useMemo(() => {
+    const keyCount: Record<string, number> = {};
+    filteredResults.forEach((result) => {
+      const key = `${result.nama}|${result.mata_pelajaran}|${result.bab_nama}|${result.jenis_ujian}`;
+      keyCount[key] = (keyCount[key] || 0) + 1;
+    });
+    const duplicates = new Set<string>();
+    Object.keys(keyCount).forEach((key) => {
+      if (keyCount[key] > 1) {
+        duplicates.add(key);
+      }
+    });
+    return duplicates;
+  }, [filteredResults]);
+
   // TAMBAHKAN FUNGSI closeNotification DI SINI
   const closeNotification = () => {
     setNotification({ type: "", message: "", show: false });
@@ -1818,6 +1833,47 @@ const ExamResults: React.FC = () => {
         </div>
       </div>
 
+      {/* Legend */}
+      <div className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+        <div className="w-4 h-4 bg-yellow-50 border-l-4 border-l-yellow-400 rounded-sm"></div>
+        <span>
+          Data ganda terdeteksi (nama, mata pelajaran, bab, dan jenis ujian
+          sama)
+        </span>
+      </div>
+
+      {/* Ringkasan Data Ganda */}
+      {duplicateKeys.size > 0 && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+          <h3 className="text-sm font-semibold text-yellow-800 mb-2">
+            ⚠️ Ditemukan {duplicateKeys.size} kombinasi data ganda:
+          </h3>
+          <ul className="text-sm text-yellow-700 space-y-1">
+            {Array.from(duplicateKeys).map((key) => {
+              const [nama, mapel, bab, jenisUjian] = key.split("|");
+              const count = filteredResults.filter(
+                (r) =>
+                  r.nama === nama &&
+                  r.mata_pelajaran === mapel &&
+                  r.bab_nama === bab &&
+                  r.jenis_ujian === jenisUjian
+              ).length;
+              return (
+                <li key={key} className="flex items-start gap-2">
+                  <span className="text-yellow-500 mt-0.5">•</span>
+                  <span>
+                    <strong>{nama}</strong> — {mapel} / {bab} / {jenisUjian}{" "}
+                    <span className="ml-1 px-1.5 py-0.5 bg-yellow-200 text-yellow-800 rounded-full text-xs font-medium">
+                      {count}x
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       {isLoading && <p>Loading...</p>}
       {error && <p className="text-red-500">{error}</p>}
       {!isLoading && !error && (
@@ -1867,7 +1923,16 @@ const ExamResults: React.FC = () => {
                 </tr>
               ) : (
                 filteredResults.map((result, index) => (
-                  <tr key={result.id || index}>
+                  <tr
+                    key={result.id || index}
+                    className={
+                      duplicateKeys.has(
+                        `${result.nama}|${result.mata_pelajaran}|${result.bab_nama}|${result.jenis_ujian}`
+                      )
+                        ? "bg-yellow-50 border-l-4 border-l-yellow-400"
+                        : ""
+                    }
+                  >
                     <td className="py-2 px-4 border">
                       <div className="flex gap-2 items-center">
                         {/* Tombol Download PDF */}
