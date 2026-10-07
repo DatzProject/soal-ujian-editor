@@ -17,7 +17,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbxoptNv0zH12Ltu6nMopRp1tCmrqLzM0yE2kzOuK9z6k1o65wu36CoYi2Hlc_l469DwUg/exec";
+  "https://script.google.com/macros/s/AKfycbw48m6jjq7a-FFPZHTLyoo9yBellqY6F0upr_jxzaYzbd96latLEGlmTwJThq3ne1B20A/exec";
 
 interface QuizQuestion {
   id: string;
@@ -2773,25 +2773,44 @@ const NilaiSiswa: React.FC = () => {
   const [error, setError] = useState<string>("");
   const [searchName, setSearchName] = useState<string>("");
 
-  const fetchNilai = (sheetParam: string) => {
-    setIsLoading(true);
+  const cacheRef = useRef<Record<string, NilaiRow[]>>({});
+  const activeRef = useRef<string>(selectedMapel);
+  activeRef.current = selectedMapel;
+
+  const fetchNilai = (sheetParam: string, force = false) => {
     setError("");
-    setNilaiData([]);
+
+    // Sudah pernah dimuat: tampilkan langsung
+    const cached = cacheRef.current[sheetParam];
+    if (cached && !force) {
+      setNilaiData(cached);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
     fetch(
       `${scriptURL}?action=getNilaiSiswa&sheet=${encodeURIComponent(
         sheetParam
-      )}`,
+      )}${force ? "&nocache=1" : ""}`,
       { method: "GET", mode: "cors" }
     )
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.data)) setNilaiData(data.data);
-        else setError("❌ Gagal mengambil data nilai: " + (data.message || ""));
-        setIsLoading(false);
+        if (data.success && Array.isArray(data.data)) {
+          cacheRef.current[sheetParam] = data.data;
+          // Abaikan jika user sudah pindah ke tab lain saat menunggu
+          if (activeRef.current === sheetParam) setNilaiData(data.data);
+        } else if (activeRef.current === sheetParam) {
+          setError("❌ Gagal mengambil data nilai: " + (data.message || ""));
+        }
+        if (activeRef.current === sheetParam) setIsLoading(false);
       })
       .catch((err) => {
-        setError("❌ " + err.message);
-        setIsLoading(false);
+        if (activeRef.current === sheetParam) {
+          setError("❌ " + err.message);
+          setIsLoading(false);
+        }
       });
   };
 
@@ -2899,7 +2918,7 @@ const NilaiSiswa: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => fetchNilai(selectedMapel)}
+            onClick={() => fetchNilai(selectedMapel, true)}
             disabled={isLoading}
             style={{
               marginLeft: "auto",
