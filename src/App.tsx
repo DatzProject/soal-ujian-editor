@@ -17,7 +17,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbxbSVIZCbDeyEpQ8DylW7-RQyZOxVsPL5hDggzP1pNNErl2sIZtVZkhaC74GnC36lvy/exec";
+  "https://script.google.com/macros/s/AKfycby46jNeAI24ZaALJZvTNFkLaTDGelF2LZ8FJvz6zCIM7tQy1ecBBwBTYXgIrO_q_9Qtiw/exec";
 
 interface QuizQuestion {
   id: string;
@@ -1335,6 +1335,8 @@ const ExamResults: React.FC = () => {
   const lastRowRef = useRef<number>(0);
   const verRef = useRef<string>("");
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const formatResult = (r: any): ExamResult => {
     const base: any = {
       id: r.id || String(Math.random()),
@@ -1444,6 +1446,7 @@ const ExamResults: React.FC = () => {
 
           if (data.full) {
             setExamResults(rows);
+            setSelectedIds(new Set());
           } else if (rows.length > 0) {
             setExamResults((prev) => [...prev, ...rows]);
           }
@@ -1558,6 +1561,93 @@ const ExamResults: React.FC = () => {
     });
     return duplicates;
   }, [filteredResults]);
+
+  // Kosongkan centang jika filter berubah
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [nameFilter, subjectFilter, chapterFilter, statusFilter, examTypeFilter]);
+
+  const allFilteredSelected =
+    filteredResults.length > 0 &&
+    filteredResults.every((r) => r.id && selectedIds.has(r.id));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(
+        new Set(filteredResults.map((r) => r.id).filter(Boolean) as string[])
+      );
+    }
+  };
+
+  const deleteSelectedResults = () => {
+    const items = examResults
+      .filter((r) => r.id && selectedIds.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        nama: r.nama,
+        mata_pelajaran: r.mata_pelajaran,
+        bab_nama: r.bab_nama,
+      }));
+
+    if (items.length === 0) return;
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin menghapus ${items.length} hasil ujian yang dipilih? Tindakan ini tidak bisa dibatalkan.`
+      )
+    )
+      return;
+
+    setIsDeleting("bulk");
+    setNotification({
+      type: "loading",
+      message: `Menghapus ${items.length} hasil ujian...`,
+      show: true,
+    });
+
+    fetch(scriptURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "deleteExamResults", items }),
+    })
+      .then(() => {
+        setNotification({
+          type: "success",
+          message: `${items.length} hasil ujian berhasil dihapus!`,
+          show: true,
+        });
+        setSelectedIds(new Set());
+        setTimeout(
+          () => setNotification({ type: "", message: "", show: false }),
+          3000
+        );
+        setTimeout(() => fetchExamResults(), 2000);
+        setIsDeleting(null);
+      })
+      .catch((error) => {
+        setNotification({
+          type: "error",
+          message: `Gagal menghapus hasil ujian: ${error.message}`,
+          show: true,
+        });
+        setTimeout(
+          () => setNotification({ type: "", message: "", show: false }),
+          5000
+        );
+        setIsDeleting(null);
+      });
+  };
 
   // TAMBAHKAN FUNGSI closeNotification DI SINI
   const closeNotification = () => {
@@ -1885,6 +1975,29 @@ const ExamResults: React.FC = () => {
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <span className="text-sm text-red-800 font-medium">
+            {selectedIds.size} data dipilih
+          </span>
+          <button
+            onClick={deleteSelectedResults}
+            disabled={isDeleting !== null}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <Trash2 size={16} />
+            Hapus Terpilih
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            disabled={isDeleting !== null}
+            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400"
+          >
+            Batal Pilih
+          </button>
+        </div>
+      )}
+
       {isLoading && <p>Loading...</p>}
       {error && <p className="text-red-500">{error}</p>}
       {!isLoading && !error && (
@@ -1892,6 +2005,17 @@ const ExamResults: React.FC = () => {
           <table className="min-w-full bg-white border">
             <thead>
               <tr>
+                <th className="py-2 px-4 border">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAll}
+                    disabled={
+                      isDeleting !== null || filteredResults.length === 0
+                    }
+                    title="Pilih semua yang tampil"
+                  />
+                </th>
                 <th className="py-2 px-4 border">Aksi</th>
                 <th className="py-2 px-4 border">No.</th>
                 <th className="py-2 px-4 border">Nama</th>
@@ -1944,6 +2068,14 @@ const ExamResults: React.FC = () => {
                         : ""
                     }
                   >
+                    <td className="py-2 px-4 border text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!result.id && selectedIds.has(result.id)}
+                        onChange={() => result.id && toggleSelect(result.id)}
+                        disabled={isDeleting !== null}
+                      />
+                    </td>
                     <td className="py-2 px-4 border">
                       <div className="flex gap-2 items-center">
                         {/* Tombol Download PDF */}
