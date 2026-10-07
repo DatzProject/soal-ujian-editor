@@ -17,7 +17,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycby46jNeAI24ZaALJZvTNFkLaTDGelF2LZ8FJvz6zCIM7tQy1ecBBwBTYXgIrO_q_9Qtiw/exec";
+  "https://script.google.com/macros/s/AKfycbxoptNv0zH12Ltu6nMopRp1tCmrqLzM0yE2kzOuK9z6k1o65wu36CoYi2Hlc_l469DwUg/exec";
 
 interface QuizQuestion {
   id: string;
@@ -1334,6 +1334,7 @@ const ExamResults: React.FC = () => {
 
   const lastRowRef = useRef<number>(0);
   const verRef = useRef<string>("");
+  const deletingRef = useRef<boolean>(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -1472,7 +1473,7 @@ const ExamResults: React.FC = () => {
       document.visibilityState === "visible" && document.hasFocus();
 
     const refreshIfActive = () => {
-      if (isActive()) fetchExamResults();
+      if (isActive() && !deletingRef.current) fetchExamResults();
     };
 
     refreshIfActive(); // muat pertama kali
@@ -1608,10 +1609,19 @@ const ExamResults: React.FC = () => {
     )
       return;
 
+    const idsToRemove = new Set(items.map((i) => i.id));
+
+    deletingRef.current = true;
     setIsDeleting("bulk");
+
+    // Tampilan langsung berubah, tanpa menunggu server
+    setExamResults((prev) =>
+      prev.filter((r) => !(r.id && idsToRemove.has(r.id)))
+    );
+    setSelectedIds(new Set());
     setNotification({
       type: "loading",
-      message: `Menghapus ${items.length} hasil ujian...`,
+      message: `Menghapus ${items.length} hasil ujian di server...`,
       show: true,
     });
 
@@ -1627,13 +1637,10 @@ const ExamResults: React.FC = () => {
           message: `${items.length} hasil ujian berhasil dihapus!`,
           show: true,
         });
-        setSelectedIds(new Set());
         setTimeout(
           () => setNotification({ type: "", message: "", show: false }),
           3000
         );
-        setTimeout(() => fetchExamResults(), 2000);
-        setIsDeleting(null);
       })
       .catch((error) => {
         setNotification({
@@ -1645,7 +1652,12 @@ const ExamResults: React.FC = () => {
           () => setNotification({ type: "", message: "", show: false }),
           5000
         );
+      })
+      .finally(() => {
+        deletingRef.current = false;
         setIsDeleting(null);
+        lastRowRef.current = 0; // paksa muat ulang penuh agar sinkron dengan sheet
+        fetchExamResults();
       });
   };
 
@@ -2052,7 +2064,7 @@ const ExamResults: React.FC = () => {
             <tbody>
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={30} className="py-2 px-4 border text-center">
+                  <td colSpan={31} className="py-2 px-4 border text-center">
                     Tidak ada data hasil ujian yang sesuai dengan filter.
                   </td>
                 </tr>
