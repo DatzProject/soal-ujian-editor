@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import {
@@ -17,7 +17,7 @@ import * as XLSX from "xlsx"; // For XLSX file parsing
 
 // Replace with your deployed Google Apps Script Web App URL
 const scriptURL =
-  "https://script.google.com/macros/s/AKfycbyRnBKNf2C8SCwN0bzHAJDbtt1hIiO0w7kPnKqXPHgSkRper3eKT2ZBLUhQGCMRBpC_/exec";
+  "https://script.google.com/macros/s/AKfycbxbSVIZCbDeyEpQ8DylW7-RQyZOxVsPL5hDggzP1pNNErl2sIZtVZkhaC74GnC36lvy/exec";
 
 interface QuizQuestion {
   id: string;
@@ -1332,6 +1332,28 @@ const ExamResults: React.FC = () => {
     show: false,
   });
 
+  const lastRowRef = useRef<number>(0);
+  const verRef = useRef<string>("");
+
+  const formatResult = (r: any): ExamResult => {
+    const base: any = {
+      id: r.id || String(Math.random()),
+      nama: r.nama || "",
+      mata_pelajaran: r.mata_pelajaran || "",
+      bab_nama: r.bab_nama || "",
+      nilai: Number(r.nilai) || 0,
+      status: r.status || "",
+      persentase: Number(r.persentase) || 0,
+      timestamp: r.timestamp || "",
+      jenis_ujian: r.jenis_ujian || "",
+      file_ujian: String(r.file_ujian || ""),
+    };
+    for (let i = 1; i <= 20; i++) {
+      base[`soal_${i}`] = String(r[`soal_${i}`] || "");
+    }
+    return base as ExamResult;
+  };
+
   // Function to format ISO date to DD/MM/YYYY
   const formatDate = (isoDate: string): string => {
     if (!isoDate) return "";
@@ -1406,59 +1428,26 @@ const ExamResults: React.FC = () => {
       });
   };
 
-  // Fetch exam results
   const fetchExamResults = () => {
-    fetch(`${scriptURL}?action=getExamResults`, {
-      method: "GET",
-      mode: "cors",
-    })
+    fetch(
+      `${scriptURL}?action=getExamResults&since=${
+        lastRowRef.current
+      }&ver=${encodeURIComponent(verRef.current)}`,
+      { method: "GET", mode: "cors" }
+    )
       .then((response) => response.json())
-      .then((data: { success: boolean; data: any[]; message?: string }) => {
-        console.log("Response from getExamResults:", data);
+      .then((data) => {
         if (data.success && Array.isArray(data.data)) {
-          const formattedResults: ExamResult[] = data.data.map(
-            (result: ExamResult & { id?: string }) => ({
-              id: result.id || String(Math.random()), // TAMBAHKAN INI
-              nama: result.nama || "",
-              mata_pelajaran: result.mata_pelajaran || "",
-              bab_nama: result.bab_nama || "",
-              nilai: Number(result.nilai) || 0,
-              status: result.status || "",
-              persentase: Number(result.persentase) || 0,
-              timestamp: result.timestamp || "",
-              jenis_ujian: result.jenis_ujian || "",
-              file_ujian: String(result.file_ujian || ""),
-              soal_1: String(result.soal_1 || ""),
-              soal_2: String(result.soal_2 || ""),
-              soal_3: String(result.soal_3 || ""),
-              soal_4: String(result.soal_4 || ""),
-              soal_5: String(result.soal_5 || ""),
-              soal_6: String(result.soal_6 || ""),
-              soal_7: String(result.soal_7 || ""),
-              soal_8: String(result.soal_8 || ""),
-              soal_9: String(result.soal_9 || ""),
-              soal_10: String(result.soal_10 || ""),
-              soal_11: String(result.soal_11 || ""),
-              soal_12: String(result.soal_12 || ""),
-              soal_13: String(result.soal_13 || ""),
-              soal_14: String(result.soal_14 || ""),
-              soal_15: String(result.soal_15 || ""),
-              soal_16: String(result.soal_16 || ""),
-              soal_17: String(result.soal_17 || ""),
-              soal_18: String(result.soal_18 || ""),
-              soal_19: String(result.soal_19 || ""),
-              soal_20: String(result.soal_20 || ""),
-            })
-          );
-          console.log("Formatted exam results:", formattedResults);
+          lastRowRef.current = data.lastRow;
+          verRef.current = String(data.ver);
+          const rows = data.data.map(formatResult);
 
-          if (
-            JSON.stringify(formattedResults) !== JSON.stringify(examResults)
-          ) {
-            setExamResults(formattedResults);
-            // Update filter options based on exam results data
-            updateFiltersFromResults(formattedResults);
+          if (data.full) {
+            setExamResults(rows);
+          } else if (rows.length > 0) {
+            setExamResults((prev) => [...prev, ...rows]);
           }
+          setError("");
         } else {
           setError("❌ Gagal mengambil data hasil ujian dari HasilUjian.");
           console.error("Error fetching exam results:", data.message);
@@ -1479,6 +1468,10 @@ const ExamResults: React.FC = () => {
     const intervalId = setInterval(fetchExamResults, 10000);
     return () => clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    updateFiltersFromResults(examResults);
+  }, [examResults]);
 
   // Filter the exam results based on dropdown selections
   const filteredResults = React.useMemo(() => {
