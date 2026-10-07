@@ -1462,11 +1462,29 @@ const ExamResults: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchExamResults();
     fetchMapelFromSheet();
 
-    const intervalId = setInterval(fetchExamResults, 10000);
-    return () => clearInterval(intervalId);
+    // Aktif hanya jika tab terlihat DAN jendela sedang fokus
+    const isActive = () =>
+      document.visibilityState === "visible" && document.hasFocus();
+
+    const refreshIfActive = () => {
+      if (isActive()) fetchExamResults();
+    };
+
+    refreshIfActive(); // muat pertama kali
+
+    const intervalId = setInterval(refreshIfActive, 10000);
+
+    // Begitu halaman kembali ditampilkan atau difokuskan, langsung perbarui
+    document.addEventListener("visibilitychange", refreshIfActive);
+    window.addEventListener("focus", refreshIfActive);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshIfActive);
+      window.removeEventListener("focus", refreshIfActive);
+    };
   }, []);
 
   useEffect(() => {
